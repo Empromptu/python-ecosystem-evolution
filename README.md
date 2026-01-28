@@ -6,6 +6,7 @@
 This study presents a comparative topological analysis of the **Python Package Index (PyPI) Dependency Network** across two temporal snapshots: 2016 and 2025. By modeling the ecosystem as directed graphs, we analyze how the architecture of the network reflects a global transition from web-infrastructure dominance to a data-science and automated testing paradigm.
 
 ## 👥 Authors (FCEN-UBA)
+* **Carlos Sarraute**
 * **Martina Rosario Pérez**
 * **Juan Ignacio Catania**
 * **Mateo Guerrero Schmidt**
