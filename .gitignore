@@ -1,0 +1,13 @@
+# =====================
+# Python cache files
+# =====================
+__pycache__/
+*.py[cod]
+
+# =====================
+# Generated output files (not tracked)
+# =====================
+outputs/*
+
+# Keep the README that explains this folder
+!outputs/README.md
