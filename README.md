@@ -10,7 +10,7 @@ This study presents a comparative topological analysis of the **Python Package I
 * **Martina Rosario Pérez**
 * **Juan Ignacio Catania**
 * **Mateo Guerrero Schmidt**
-* **Sofia Gutierrez**
+* **Sofía Gutierrez**
 
 *Department of Computing, Facultad de Ciencias Exactas y Naturales - Universidad de Buenos Aires*
 
