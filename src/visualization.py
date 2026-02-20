@@ -16,14 +16,14 @@ def plot_top_metrics(df_metrics, metric_column, title_name, top_n=10):
     
     plt.figure(figsize=(6, 4))
     
-    ax = topk.set_index("nodo")[metric_column].plot(kind="barh")
+    ax = topk.set_index("node")[metric_column].plot(kind="barh")
     ax.set_xlabel(metric_column + " (Log Scale)")
     ax.set_ylabel('') 
     ax.set_xscale("log")
     ax.tick_params(axis='y', labelsize=14)
     
     plt.tight_layout()
-    output_dir = "/output/images"
+    output_dir = "output/images"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
