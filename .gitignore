@@ -5,6 +5,13 @@ __pycache__/
 *.py[cod]
 
 # =====================
+# Virtual environments
+# =====================
+venv/
+.env/
+.venv/
+
+# =====================
 # Generated output files (not tracked)
 # =====================
 output/*
