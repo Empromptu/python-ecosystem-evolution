@@ -1,5 +1,5 @@
 # src/__init__.py
-from .cleaning import clean_package_name, standardize_and_clean
+from .cleaning import clean_dataframe, clean, process_package_file
 from .metrics import (
     get_basic_metrics, 
     get_connected_components,
@@ -14,8 +14,9 @@ from .metrics import (
 from .visualization import plot_top_metrics, plot_wordcloud_and_rank
 
 __all__ = [
-    'clean_package_name',
-    'standardize_and_clean',
+    'clean_dataframe',
+    'clean',
+    'process_package_file',
     'get_basic_metrics',
     'get_connected_components',
     'calculate_all_centralities',

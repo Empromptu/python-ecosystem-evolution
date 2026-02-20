@@ -3,27 +3,36 @@ import re
 from collections import Counter
 from wordcloud import WordCloud
 import pandas as pd
+import matplotlib.pyplot as plt
+import os
 
 def plot_top_metrics(df_metrics, metric_column, title_name, top_n=10):
     """
-    Generates a bar chart for the top N nodes of a specific metric.
+    Generates a horizontal bar chart for the top N nodes of a specific metric,
+    following the visual style of the reference image.
     """
-    # Sort and select top N
+
     topk = df_metrics.sort_values(metric_column, ascending=False).head(top_n)
     
-    plt.figure(figsize=(12, 6))
-    ax = topk.set_index("node")[metric_column].plot(kind="bar", color="skyblue", edgecolor="black")
+    plt.figure(figsize=(6, 4))
     
-    ax.set_title(f"Top {top_n} by {title_name}", fontsize=16)
-    ax.set_xlabel("Package", fontsize=12)
-    ax.set_ylabel(f"{title_name} (Log Scale)", fontsize=12)
+    ax = topk.set_index("nodo")[metric_column].plot(kind="barh")
+    ax.set_xlabel(metric_column + " (Log Scale)")
+    ax.set_ylabel('') 
+    ax.set_xscale("log")
+    ax.tick_params(axis='y', labelsize=14)
     
-    # Use logarithmic scale to handle the power-law distribution typical in graphs
-    ax.set_yscale("log")
-    
-    plt.xticks(rotation=45, ha="right")
-    plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
+    output_dir = "/output/images"
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    save_filename = f"top_{top_n}_{metric_column}.png"
+    savepath = os.path.join(output_dir, save_filename)
+    
+    plt.savefig(savepath)
+    print(f"Graph saved in: {savepath}")
+    
     plt.show()
     
 def plot_wordcloud_and_rank(nodes, title, i, pagerank_dict, df_descriptions, save=False, save_path=None):
