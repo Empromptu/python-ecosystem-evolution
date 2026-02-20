@@ -7,7 +7,7 @@ __pycache__/
 # =====================
 # Generated output files (not tracked)
 # =====================
-outputs/*
+output/*
 
 # Keep the README that explains this folder
-!outputs/README.md
+!output/README.md
