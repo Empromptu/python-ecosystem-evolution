@@ -3,34 +3,33 @@ import re
 from collections import Counter
 from wordcloud import WordCloud
 import pandas as pd
-import matplotlib.pyplot as plt
 import os
 
-def plot_top_metrics(df_metrics, metric_column, title_name, top_n=10):
+def plot_top_metrics(df_metrics, metric_column, year, top_n=10):
     """
     Generates a horizontal bar chart for the top N nodes of a specific metric,
     following the visual style of the reference image.
     """
 
-    topk = df_metrics.sort_values(metric_column, ascending=False).head(top_n)
+    topk = df_metrics.sort_values(metric_column, ascending=True).tail(top_n)
     
-    plt.figure(figsize=(6, 4))
+    plt.figure(figsize=(3, 12))
     
-    ax = topk.set_index("node")[metric_column].plot(kind="barh")
-    ax.set_xlabel(metric_column + " (Log Scale)")
-    ax.set_ylabel('') 
-    ax.set_xscale("log")
-    ax.tick_params(axis='y', labelsize=14)
+    ax = topk.set_index("node")[metric_column].plot(kind="barh", color='teal', alpha=0.6)
+    ax.set_ylabel('')
+    ax.tick_params(axis='both', labelsize=28)
+    for spine in ax.spines.values(): 
+        spine.set_visible(False)
     
-    plt.tight_layout()
+    
     output_dir = "output/images"
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
-    save_filename = f"top_{top_n}_{metric_column}.png"
+    save_filename = f"top_{top_n}_{metric_column}_{year}.png"
     savepath = os.path.join(output_dir, save_filename)
     
-    plt.savefig(savepath)
+    plt.savefig(savepath, bbox_inches='tight')
     print(f"Graph saved in: {savepath}")
     
     plt.show()
@@ -88,3 +87,57 @@ def plot_wordcloud_and_rank(nodes, title, i, pagerank_dict, df_descriptions, sav
         print(f"  ✓ Saved: {save_path}")
     else:
         plt.show()
+
+
+def plot_communities_distribution(comm_sizes, year, top_n=15):
+    """
+    Generates the distribution of community sizes. Both individual and
+    cummulative nodes.
+    """
+    percentages = 100 * comm_sizes / sum(comm_sizes)
+    top_percentages = percentages.sort_values(ascending=False).head(top_n)
+    
+    fig, ax = plt.subplots(figsize=(6,3))
+    ax.bar(range(1, top_n+1), top_percentages.values, color='teal', alpha=0.6)
+    ax.set_xticks(range(1, top_n+1))
+    ax.set_xticklabels(top_percentages.index)
+    ax.grid(axis='y')
+    ax.tick_params(axis='x', labelrotation=0)
+    ax.yaxis.set_major_formatter('{x:.0f}%')
+
+    for spine in ax.spines.values(): 
+        spine.set_visible(False)
+        
+    output_dir = "output/images"
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+
+    save_filename = f"indiviudal_community_distribution_{year}.png"
+    savepath = os.path.join(output_dir, save_filename)
+    
+    plt.savefig(savepath, bbox_inches='tight')
+    print(f"Graph saved in: {savepath}")
+    
+    plt.show()
+
+
+
+    cummulative = [sum(top_percentages[:i]) for i in range(1,top_n+1)]
+
+    fig, ax = plt.subplots(figsize=(6,3))
+    ax.bar(range(1, top_n+1), cummulative, color='teal', alpha=0.6)
+    ax.set_xticks(range(1, top_n+1))
+    ax.grid(axis='y')
+    ax.tick_params(axis='x', labelrotation=0)
+    ax.set_ylim((0,100))
+    ax.yaxis.set_major_formatter('{x:.0f}%')
+    for spine in ax.spines.values(): 
+        spine.set_visible(False)
+    
+    save_filename = f"cummulative_community_distribution_{year}.png"
+    savepath = os.path.join(output_dir, save_filename)
+    
+    plt.savefig(savepath, bbox_inches='tight')
+    print(f"Graph saved in: {savepath}")
+    
+    plt.show()

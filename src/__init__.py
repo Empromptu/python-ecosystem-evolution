@@ -11,7 +11,7 @@ from .metrics import (
     create_top_communities_subgraph,
     export_to_gephi
 )
-from .visualization import plot_top_metrics, plot_wordcloud_and_rank
+from .visualization import plot_top_metrics, plot_wordcloud_and_rank, plot_communities_distribution
 
 __all__ = [
     'clean_dataframe',

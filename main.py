@@ -13,6 +13,7 @@ from src import (
     create_subgraph_by_degree,
     plot_top_metrics, 
     plot_wordcloud_and_rank,
+    plot_communities_distribution,
     export_to_gephi
 )
 
@@ -27,10 +28,10 @@ CONFIG = {
         "degree_min": 45,
         "pagerank_percentile": 0.95,
         "betweenness_top_n": 300,
-        "communities_top_n": 3
+        "communities_top_n": 4
     },
     "visualization_params": {
-        "top_n_metrics": 10,
+        "top_n_metrics": 15,
         "pagerank_max_iter": 50
     }
 }
@@ -111,20 +112,21 @@ def analyze_single_dataset(year, df_clean, df_descriptions):
     df_metrics = calculate_all_centralities(G)
     print(f"✓ Calculated")
     
-    # Visualize
-    print("\n--- VISUALIZING ---")
-    for col, title in [
-        ("degree_centrality", f"Degree ({year})"),
-        ("pagerank", f"PageRank ({year})"),
-        ("betweenness_centrality", f"Betweenness ({year})")
-    ]:
-        plot_top_metrics(df_metrics, col, title, top_n=CONFIG["visualization_params"]["top_n_metrics"])
+    # Visualize Metrics
+    print("\n--- VISUALIZING METRICS---")
+    for col in [
+        "degree_centrality", "pagerank", "betweenness_centrality", "closeness_centrality"
+        ]:
+        plot_top_metrics(df_metrics, col, year, top_n=CONFIG["visualization_params"]["top_n_metrics"])
     
     # Communities
     print("\n--- COMMUNITIES ---")
     G_und, partition, modularity, comm_sizes = compute_communities(G_und)
     print(f"✓ Found {len(set(partition.values()))} communities")
     print(f"✓ Modularity: {modularity:.4f}")
+
+    print("\n--- VISUALIZING COMMUNITY DISTRIBUTION---")    
+    plot_communities_distribution(comm_sizes, year, 15)
     
     # Subgraphs
     print("\n--- SUBGRAPHS ---")
@@ -184,7 +186,7 @@ def analyze_single_dataset(year, df_clean, df_descriptions):
             for i, comm_id in enumerate(comm_sizes.head(CONFIG["subgraph_params"]["communities_top_n"]).index, 1):
                 nodes_comm = [n for n, c in partition.items() if c == comm_id]
                 plot_wordcloud_and_rank(
-                    nodes_comm, f"Year {year} - Community {comm_id}", f"{year}_{i}",
+                    nodes_comm, f"Year {year} - Community Top {i}", f"{year}_{i}",
                     pr_dict, df_descriptions,
                     save=True, save_path=f"output/images/wordcloud_{year}_{i}.png"
                 )
@@ -244,7 +246,7 @@ if __name__ == "__main__":
     )
     
     # Or single dataset:
-    # analyze_datasets(Y2026="data/raw.parquet")
+    # analyze_datasets(Y2025="data/raw.parquet")
     
     # Or mix CSV and parquet:
     # analyze_datasets(Y2016="data/raw_2016.parquet", Y2025="data/clean_data_2025.csv")
