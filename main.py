@@ -23,6 +23,9 @@ from src import (
 
 CONFIG = {
     "output_dirs": ["output", "output/images", "output/gephi", "output/csv"],
+    "load_params": {
+        "load_centralities" : True
+    },
     "subgraph_params": {
         "in_degree_threshold": 500,
         "degree_min": 45,
@@ -108,12 +111,22 @@ def analyze_single_dataset(year, df_clean, df_descriptions):
         print(f"{k}: {v}")
     
     # Centralities
-    print("\n--- CALCULATING CENTRALITIES ---")
-    df_metrics = calculate_all_centralities(G)
-    print(f"✓ Calculated")
+    if CONFIG["load_params"]["load_centralities"]:
+        print("\n--- LOADING CENTRALITIES ---")
+        file_path = f"./output/csv/centralities_{year}.csv"
+        try:
+            df_metrics = pd.read_csv(file_path)
+            print("✓ Loaded")
+        except Exception as e:
+            print(f"✗ Error loading {file_path}: {e}")
+        
+    else:
+        print("\n--- CALCULATING CENTRALITIES ---")
+        df_metrics = calculate_all_centralities(G)
+        print("✓ Calculated")
     
     # Visualize Metrics
-    print("\n--- VISUALIZING METRICS---")
+    print("\n--- VISUALIZING METRICS ---")
     for col in [
         "degree_centrality", "pagerank", "betweenness_centrality", "closeness_centrality"
         ]:
@@ -125,7 +138,7 @@ def analyze_single_dataset(year, df_clean, df_descriptions):
     print(f"✓ Found {len(set(partition.values()))} communities")
     print(f"✓ Modularity: {modularity:.4f}")
 
-    print("\n--- VISUALIZING COMMUNITY DISTRIBUTION---")    
+    print("\n--- VISUALIZING COMMUNITY DISTRIBUTION ---")    
     plot_communities_distribution(comm_sizes, year, 15)
     
     # Subgraphs
