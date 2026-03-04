@@ -62,13 +62,14 @@ def plot_wordcloud_and_rank(nodes, title, i, pagerank_dict, df_descriptions, sav
 
     # Create WordCloud
     wordcloud = WordCloud(
-        width=800, height=800,
+        width=600, height=800,
         background_color='white',
+        colormap="tab10",
         random_state=42
     ).generate_from_frequencies(count_filtered)
 
     # Plotting
-    fig, ax = plt.subplots(1, 2, figsize=(16, 9), gridspec_kw={'width_ratios': [2, 1]})
+    fig, ax = plt.subplots(1, 2, figsize=(6.2, 3), gridspec_kw={'width_ratios': [2, 1]})
     
     ax[0].imshow(wordcloud, interpolation='bilinear')
     ax[0].axis('off')
@@ -79,7 +80,7 @@ def plot_wordcloud_and_rank(nodes, title, i, pagerank_dict, df_descriptions, sav
         spine.set_visible(False)
     ax[1].get_xaxis().set_ticks([])
     
-    fig.suptitle(title, size=20)
+    # fig.suptitle(title, size=20)
     fig.tight_layout()
     
     if save and save_path:
