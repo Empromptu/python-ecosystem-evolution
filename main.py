@@ -72,6 +72,13 @@ def load_and_clean_data(file_path, year):
         # Remove duplicates
         df = df.drop_duplicates()
         
+        # Save clean data
+        if file_path.suffix == ".parquet":
+            os.makedirs("data", exist_ok=True) # Ensure dir exists
+            out_path = f"data/clean_data_{year}.csv"
+            df.to_csv(out_path, index=False)
+            print(f"✓ Saved clean dataframe to {out_path}")
+        
         print(f"✓ Loaded: {len(df):,} clean rows ({df['package_name'].nunique():,} packages)")
         return df
     except Exception as e:
@@ -119,6 +126,9 @@ def analyze_single_dataset(year, df_clean, df_descriptions):
             print("✓ Loaded")
         except Exception as e:
             print(f"✗ Error loading {file_path}: {e}")
+            print("\n--- CALCULATING CENTRALITIES ---")
+            df_metrics = calculate_all_centralities(G)
+            print("✓ Calculated")
         
     else:
         print("\n--- CALCULATING CENTRALITIES ---")
