@@ -13,9 +13,9 @@ def plot_top_metrics(df_metrics, metric_column, year, top_n=10):
 
     topk = df_metrics.sort_values(metric_column, ascending=True).tail(top_n)
     
-    plt.figure(figsize=(3, 12))
+    plt.figure(figsize=(3.5, 0.7*top_n +1))
     
-    ax = topk.set_index("node")[metric_column].plot(kind="barh", color='teal', alpha=0.6)
+    ax = topk.set_index("node")[metric_column].plot(kind="barh", color='teal', alpha=0.6, width=.7)
     ax.set_ylabel('')
     ax.tick_params(axis='both', labelsize=28)
     for spine in ax.spines.values(): 
@@ -34,27 +34,14 @@ def plot_top_metrics(df_metrics, metric_column, year, top_n=10):
     
     plt.show()
     
+
 def plot_wordcloud_and_rank(nodes, title, i, pagerank_dict, df_descriptions, save=False, save_path=None):
     """Generates a combined WordCloud and PageRank bar chart for a community."""
+    word_lists = df_descriptions[df_descriptions['name'].isin(nodes)]['word_list']
     
-    # Filter descriptions for nodes in this community
-    descriptions = df_descriptions[df_descriptions['name'].isin(nodes)]['summary']
-    
-    all_words = []
-    for d in descriptions:
-        if d is None or pd.isna(d): 
-            continue
-        words = re.split(r"[ ,.-:(){\n}]+", str(d).lower())
-        all_words += list(filter(None, words))
-
-    counts = Counter(all_words)
-    stop_words = {
-        'for', 'a', 'library', 'and', 'the', 'package', 'python', 'in', 'to', 
-        'with', 'of', 'as', 'is', 'it', 'on', 'an', 'that', '-', 'your', 
-        'which', 'you', 'by', 'into', 'or', 'from', 'module', 'this', 'simple', 'fast'
-    }
-
-    count_filtered = {k: v for k, v in counts.items() if k not in stop_words}
+    comm_count = Counter()
+    for wl in word_lists:
+        comm_count += Counter(wl)
     
     # Get top 10 nodes by PageRank for the side bar chart
     top_nodes = sorted(nodes, key=lambda n: pagerank_dict.get(n, 0), reverse=True)[:10]
@@ -66,21 +53,21 @@ def plot_wordcloud_and_rank(nodes, title, i, pagerank_dict, df_descriptions, sav
         background_color='white',
         colormap="tab10",
         random_state=42
-    ).generate_from_frequencies(count_filtered)
+    ).generate_from_frequencies(comm_count)
 
     # Plotting
     fig, ax = plt.subplots(1, 2, figsize=(6.2, 3), gridspec_kw={'width_ratios': [2, 1]})
     
     ax[0].imshow(wordcloud, interpolation='bilinear')
     ax[0].axis('off')
-    
+        
+    f = lambda x: x[:12] + '...' if len(x)>14 else x
+    top_nodes = [f(n) for n in top_nodes]
     ax[1].barh(top_nodes[::-1], top_values[::-1], color='teal', alpha=0.6)
-    ax[1].tick_params(axis='both', labelsize=12)
+    ax[1].tick_params(axis='y', labelsize=12, pad=6)
     for spine in ax[1].spines.values(): 
         spine.set_visible(False)
     ax[1].get_xaxis().set_ticks([])
-    
-    # fig.suptitle(title, size=20)
     fig.tight_layout()
     
     if save and save_path:
@@ -142,3 +129,4 @@ def plot_communities_distribution(comm_sizes, year, top_n=15):
     print(f"Graph saved in: {savepath}")
     
     plt.show()
+    

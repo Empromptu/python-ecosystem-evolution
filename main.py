@@ -2,6 +2,7 @@ import pandas as pd
 import networkx as nx
 import os
 from pathlib import Path
+import simplemma
 
 from src import (
     clean_dataframe,
@@ -26,23 +27,26 @@ from src import (
 CONFIG = {
     "full_run" : False, # if set to true, runs everything from scratch
     "input_dirs": {
-        "descriptions" : "../../python-ecosystem-evolution/data/raw.parquet"
+        "raw_descriptions" : "../../python-ecosystem-evolution/data/raw.parquet"
         },
     "output_dirs": ["output", "output/images", "output/gephi", "output/csv"],
     "load_params": {
         "load_centralities" : True,
         "load_communities" : True,
+        "load_descriptions" : True,
     },
     "compute" : {
-        "Subgraphs" : False,
+        "Subgraphs" : True,
         "Top Metrics": False,
-        "Wordclouds" : True,
+        "Wordclouds" : False,
         "save_stats" : False,
+        "CommunitiesDistribution" : False,
         },
     "subgraph_params": {
         "in_degree_threshold": 500,
         "degree_min": 45,
-        "pagerank_percentile": 0,
+        "pagerank_percentile": 0.95,
+        "pagerank_top_n": 10000,
         "betweenness_top_n": 300,
         "communities_top_n": 10
     },
@@ -99,16 +103,45 @@ def load_and_clean_data(file_path, year):
         return None
 
 
+def lematizar(texto):
+    """Tokeniza + lematiza + filtra en una sola pasada."""
+    if not isinstance(texto, str) or not texto.strip():
+        return ""
+    STOPWORDS = {
+        'for', 'a', 'library', 'and', 'the', 'package', 'python', 'in', 'to', 
+        'with', 'of', 'as', 'is', 'it', 'on', 'an', 'that', '-', 'your', 
+        'which', 'you', 'by', 'into', 'or', 'from', 'module', 'this', 'use',
+        
+    }
+    tokens = simplemma.simple_tokenizer(texto.lower())
+    lemas = (
+        simplemma.lemmatize(tok, lang='en')
+        for tok in tokens
+        if tok.isalpha() and tok not in STOPWORDS
+    )
+    return [l for l in lemas if len(l) > 2 and l not in STOPWORDS]
+
+
 def load_descriptions():
     print("""Loading package summaries""")
+    
+    if CONFIG["load_params"]["load_descriptions"]:
+        df = pd.read_csv("data/word_list.csv", index_col=0)
+        df["word_list"] = df["word_list"].apply(eval)
+        return df
+    
     try:
-        df = pd.read_parquet(CONFIG["input_dirs"]["descriptions"])
+        df = pd.read_parquet(CONFIG["input_dirs"]["raw_descriptions"])
     except Exception as e:
         print(f"⚠ Error loading descriptions: {e}")
         return None
     
     df['name'] = df["name"].apply(clean)
     df = df[["name","summary"]].drop_duplicates()
+    
+    df["word_list"] = df["summary"].apply(lematizar).apply(set).apply(list)
+    df = df[["name","word_list"]]
+    df.to_csv("data/word_list.csv")
 
     return df
 
@@ -161,6 +194,14 @@ def create_subgraphs(year, G, G_und, df_metrics):
         nx.set_node_attributes(sub_pr, bet_dict, "betweenness")
         print(f"✓ PageRank: {sub_pr.number_of_nodes()} nodes")
         export_to_gephi(sub_pr, f"output/gephi/subgrafo_pagerank_{year}_{CONFIG["subgraph_params"]["pagerank_percentile"]}.gexf")
+    except Exception as e:
+        print(f"⚠ PageRank error: {e}")
+    
+    try:
+        pr_series = pd.Series(pr_dict)
+        sub_pr, _ = create_subgraph_by_metric(G_und, pr_dict, top_n=CONFIG["subgraph_params"]["pagerank_top_n"])
+        print(f"✓ PageRank: {sub_pr.number_of_nodes()} nodes")
+        export_to_gephi(sub_pr, f"output/gephi/subgrafo_pagerank_{year}_{CONFIG["subgraph_params"]["pagerank_top_n"]}.gexf")
     except Exception as e:
         print(f"⚠ PageRank error: {e}")
     
@@ -260,16 +301,17 @@ def analyze_single_dataset(year, df_clean):
         print(f"✓ Modularity: {modularity:.4f}")    
 
     # Community distribution
-    print("\n--- VISUALIZING COMMUNITY DISTRIBUTION ---")    
-    plot_communities_distribution(comm_sizes, year, 15)
+    if CONFIG["compute"]["CommunitiesDistribution"]:
+        print("\n--- VISUALIZING COMMUNITY DISTRIBUTION ---")    
+        plot_communities_distribution(comm_sizes, year, top_n=15)
     
     # Subgraphs
     if CONFIG["compute"]["Subgraphs"]:
         create_subgraphs(year, G, G_und, df_metrics)
 
-    
     # Wordclouds
-    compute_wordclouds(year, G, df_metrics, comm_sizes, partition)
+    if CONFIG["compute"]["Wordclouds"]:    
+        compute_wordclouds(year, G, df_metrics, comm_sizes, partition)
 
     # Export
     print("\n--- EXPORTING CSV ---")

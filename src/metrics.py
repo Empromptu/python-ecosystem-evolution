@@ -42,7 +42,7 @@ def get_connected_components(G):
             "cc_min": min(sizes) if sizes else 0
         }
 
-def calculate_all_centralities(G, k_bet=1500):
+def calculate_all_centralities(G, k_bet=500):
     """
     Calculates the 4 main centrality metrics and returns a consolidated DataFrame.
     """
@@ -52,8 +52,8 @@ def calculate_all_centralities(G, k_bet=1500):
     print("Calculating PageRank...")
     pr = nx.pagerank(G)
     
-    print(f"Calculating Betweenness (approx. with k={500})...")
-    bet = nx.betweenness_centrality(G, k=500, seed=42)
+    print(f"Calculating Betweenness (approx. with k={k_bet})...")
+    bet = nx.betweenness_centrality(G, k=k_bet, seed=42)
     
     print("Calculating Closeness Centrality...")
     # Note: Closeness is computationally expensive O(n^2)
