@@ -2,8 +2,10 @@ import pandas as pd
 import networkx as nx
 import os
 from pathlib import Path
+
 from src import (
     clean_dataframe,
+    clean,
     get_basic_metrics,
     get_connected_components,
     calculate_all_centralities, 
@@ -22,16 +24,27 @@ from src import (
 # ============================================================
 
 CONFIG = {
+    "full_run" : False, # if set to true, runs everything from scratch
+    "input_dirs": {
+        "descriptions" : "../../python-ecosystem-evolution/data/raw.parquet"
+        },
     "output_dirs": ["output", "output/images", "output/gephi", "output/csv"],
     "load_params": {
-        "load_centralities" : True
+        "load_centralities" : True,
+        "load_communities" : True,
     },
+    "compute" : {
+        "Subgraphs" : False,
+        "Top Metrics": False,
+        "Wordclouds" : True,
+        "save_stats" : False,
+        },
     "subgraph_params": {
         "in_degree_threshold": 500,
         "degree_min": 45,
-        "pagerank_percentile": 0.95,
+        "pagerank_percentile": 0,
         "betweenness_top_n": 300,
-        "communities_top_n": 4
+        "communities_top_n": 10
     },
     "visualization_params": {
         "top_n_metrics": 15,
@@ -60,7 +73,7 @@ def load_and_clean_data(file_path, year):
         # Ensure correct columns exist
         if 'package_name' not in df.columns or 'requirement' not in df.columns:
             print(f"⚠ CSV columns: {df.columns.tolist()}")
-            print(f"⚠ Expected: package_name, requirement")
+            print("⚠ Expected: package_name, requirement")
             raise ValueError("Missing required columns")
         
         # Keep only necessary columns
@@ -85,39 +98,22 @@ def load_and_clean_data(file_path, year):
         print(f"✗ Error loading {file_path}: {e}")
         return None
 
-def load_descriptions():
-    """Load descriptions for wordclouds."""
-    try:
-        df = pd.read_parquet("data/raw.parquet")
-        df['name_clean'] = df['name'].str.lower().str.strip()
-        return df
-    except:
-        return None
 
-def analyze_single_dataset(year, df_clean, df_descriptions):
-    """Analyze a single year dataset."""
-    print(f"\n{'='*60}\n ANALYZING YEAR: {year}\n{'='*60}")
+def load_descriptions():
+    print("""Loading package summaries""")
+    try:
+        df = pd.read_parquet(CONFIG["input_dirs"]["descriptions"])
+    except Exception as e:
+        print(f"⚠ Error loading descriptions: {e}")
+        return None
     
-    # Build graph
-    G = nx.from_pandas_edgelist(
-        df_clean, source='package_name', target='requirement', create_using=nx.DiGraph()
-    )
-    G_und = G.to_undirected()
-    print(f"✓ Graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
-    
-    # Metrics
-    print("\n--- BASIC METRICS ---")
-    stats = get_basic_metrics(G)
-    for k, v in stats.items():
-        print(f"{k}: {v:,.2f}" if isinstance(v, float) else f"{k}: {v:,}")
-    
-    # Components
-    print("\n--- CONNECTED COMPONENTS ---")
-    comp_stats = get_connected_components(G)
-    for k, v in comp_stats.items():
-        print(f"{k}: {v}")
-    
-    # Centralities
+    df['name'] = df["name"].apply(clean)
+    df = df[["name","summary"]].drop_duplicates()
+
+    return df
+
+
+def analyze_centralities(year, G):
     if CONFIG["load_params"]["load_centralities"]:
         print("\n--- LOADING CENTRALITIES ---")
         file_path = f"./output/csv/centralities_{year}.csv"
@@ -129,29 +125,15 @@ def analyze_single_dataset(year, df_clean, df_descriptions):
             print("\n--- CALCULATING CENTRALITIES ---")
             df_metrics = calculate_all_centralities(G)
             print("✓ Calculated")
-        
     else:
         print("\n--- CALCULATING CENTRALITIES ---")
         df_metrics = calculate_all_centralities(G)
         print("✓ Calculated")
     
-    # Visualize Metrics
-    print("\n--- VISUALIZING METRICS ---")
-    for col in [
-        "degree_centrality", "pagerank", "betweenness_centrality", "closeness_centrality"
-        ]:
-        plot_top_metrics(df_metrics, col, year, top_n=CONFIG["visualization_params"]["top_n_metrics"])
-    
-    # Communities
-    print("\n--- COMMUNITIES ---")
-    G_und, partition, modularity, comm_sizes = compute_communities(G_und)
-    print(f"✓ Found {len(set(partition.values()))} communities")
-    print(f"✓ Modularity: {modularity:.4f}")
+    return df_metrics
 
-    print("\n--- VISUALIZING COMMUNITY DISTRIBUTION ---")    
-    plot_communities_distribution(comm_sizes, year, 15)
-    
-    # Subgraphs
+
+def create_subgraphs(year, G, G_und, df_metrics):
     print("\n--- SUBGRAPHS ---")
     pr_dict = dict(zip(df_metrics['node'], df_metrics['pagerank']))
     bet_dict = dict(zip(df_metrics['node'], df_metrics['betweenness_centrality']))
@@ -169,14 +151,16 @@ def analyze_single_dataset(year, df_clean, df_descriptions):
         export_to_gephi(sub_deg, f"output/gephi/subgrafo_degree_{year}.gexf")
     except Exception as e:
         print(f"⚠ Degree error: {e}")
-    
+
     try:
         pr_series = pd.Series(pr_dict)
         threshold = pr_series.quantile(CONFIG["subgraph_params"]["pagerank_percentile"])
         nodes = [n for n, v in pr_dict.items() if v >= threshold]
-        sub_pr = G.subgraph(nodes).copy()
+        sub_pr = G_und.subgraph(nodes).copy()
+        nx.set_node_attributes(sub_pr, pr_dict, "pagerank")
+        nx.set_node_attributes(sub_pr, bet_dict, "betweenness")
         print(f"✓ PageRank: {sub_pr.number_of_nodes()} nodes")
-        export_to_gephi(sub_pr, f"output/gephi/subgrafo_pagerank_{year}.gexf")
+        export_to_gephi(sub_pr, f"output/gephi/subgrafo_pagerank_{year}_{CONFIG["subgraph_params"]["pagerank_percentile"]}.gexf")
     except Exception as e:
         print(f"⚠ PageRank error: {e}")
     
@@ -187,7 +171,106 @@ def analyze_single_dataset(year, df_clean, df_descriptions):
         export_to_gephi(sub_bet, f"output/gephi/subgrafo_betweenness_{year}.gexf")
     except Exception as e:
         print(f"⚠ Betweenness error: {e}")
+
+
+def compute_wordclouds(year, G, df_metrics, comm_sizes, partition):
+    print("\n--- WORDCLOUDS ---")
+
+    df_descriptions = load_descriptions()
+    pr_dict = dict(zip(df_metrics['node'], df_metrics['pagerank']))
+    communities = {}
+    for i, comm_id in enumerate(comm_sizes.head(CONFIG["subgraph_params"]["communities_top_n"]).index, 1):
+        communities[comm_id] = [n for n, c in partition.items() if c == comm_id]
     
+    try:
+        for i, comm_id in enumerate(comm_sizes.head(CONFIG["subgraph_params"]["communities_top_n"]).index, 1):
+            plot_wordcloud_and_rank(
+                communities[comm_id], f"Year {year} - Community Top {i}", f"{year}_{i}",
+                pr_dict, df_descriptions,
+                save=True, save_path=f"output/images/wordcloud_{year}_{i}.png"
+            )
+
+        print("✓ Generated")
+    except Exception as e:
+        print(f"⚠ Error: {e}")
+
+
+def analyze_single_dataset(year, df_clean):
+    """Analyze a single year dataset."""
+    print(f"\n{'='*60}\n ANALYZING YEAR: {year}\n{'='*60}")
+    
+    # Build graph
+    G = nx.from_pandas_edgelist(
+        df_clean, source='package_name', target='requirement', create_using=nx.DiGraph()
+    )
+    G_und = G.to_undirected()
+    print(f"✓ Graph: {G.number_of_nodes()} nodes, {G.number_of_edges()} edges")
+    
+
+    # Metrics
+    print("\n--- BASIC METRICS ---")
+    stats = get_basic_metrics(G)
+    for k, v in stats.items():
+        print(f"{k}: {v:,.2f}" if isinstance(v, float) else f"{k}: {v:,}")
+    
+    
+    # Components
+    print("\n--- CONNECTED COMPONENTS ---")
+    comp_stats = get_connected_components(G)
+    for k, v in comp_stats.items():
+        print(f"{k}: {v}")
+    
+    
+    # Centralities
+    df_metrics = analyze_centralities(year, G)
+
+    
+    # Visualize Metrics
+    if CONFIG["compute"]["Top Metrics"]:
+        print("\n--- VISUALIZING METRICS ---")
+        for col in [
+            "degree_centrality", "pagerank", "betweenness_centrality", "closeness_centrality"
+            ]:
+            plot_top_metrics(df_metrics, col, year, top_n=CONFIG["visualization_params"]["top_n_metrics"])
+
+
+    # Communities
+    if CONFIG["load_params"]["load_communities"]:
+        print("\n--- LOADING COMMUNITIES ---")
+        try:
+            partition  = pd.read_csv(f"output/csv/community_partition_{year}.csv",
+                                     index_col=0, header=0).iloc[:,0].to_dict()
+            print("✓ Partition loaded")
+        except Exception as e:
+            print(f"✗ Error loading output/csv/community_partition_{year}.csv: {e}")
+        try:
+            comm_sizes = pd.read_csv(f"output/csv/community_sizes_{year}.csv",
+                                     index_col=0, header=0).iloc[:,0]
+            print("✓ Communities sizes loaded")
+        except Exception as e:
+            print(f"✗ Error loading output/csv/community_sizes_{year}.csv: {e}")
+
+    else:
+        print("\n--- CALCULATING COMMUNITIES ---")
+        G_und, partition, modularity, comm_sizes = compute_communities(G_und)
+        pd.Series(partition,name="comm_id").to_csv(f"output/csv/community_partition_{year}.csv")
+        comm_sizes.to_csv(f"output/csv/community_sizes_{year}.csv")
+
+        print(f"✓ Found {len(set(partition.values()))} communities")
+        print(f"✓ Modularity: {modularity:.4f}")    
+
+    # Community distribution
+    print("\n--- VISUALIZING COMMUNITY DISTRIBUTION ---")    
+    plot_communities_distribution(comm_sizes, year, 15)
+    
+    # Subgraphs
+    if CONFIG["compute"]["Subgraphs"]:
+        create_subgraphs(year, G, G_und, df_metrics)
+
+    
+    # Wordclouds
+    compute_wordclouds(year, G, df_metrics, comm_sizes, partition)
+
     # Export
     print("\n--- EXPORTING CSV ---")
     df_metrics.to_csv(f"output/csv/centralities_{year}.csv", index=False)
@@ -202,22 +285,7 @@ def analyze_single_dataset(year, df_clean, df_descriptions):
     }).to_csv(f"output/csv/summary_{year}.csv", index=False)
     print("✓ Exported")
     
-    # Wordclouds
-    if df_descriptions is not None:
-        print("\n--- WORDCLOUDS ---")
-        try:
-            for i, comm_id in enumerate(comm_sizes.head(CONFIG["subgraph_params"]["communities_top_n"]).index, 1):
-                nodes_comm = [n for n, c in partition.items() if c == comm_id]
-                plot_wordcloud_and_rank(
-                    nodes_comm, f"Year {year} - Community Top {i}", f"{year}_{i}",
-                    pr_dict, df_descriptions,
-                    save=True, save_path=f"output/images/wordcloud_{year}_{i}.png"
-                )
-            print("✓ Generated")
-        except Exception as e:
-            print(f"⚠ Error: {e}")
-    
-    return stats
+
 
 # ============================================================
 # MAIN: ANALYZE DATASETS
@@ -238,7 +306,7 @@ def analyze_datasets(**datasets):
         return
     
     setup_directories()
-    df_desc = load_descriptions()
+
     
     results = {}
     
@@ -247,7 +315,7 @@ def analyze_datasets(**datasets):
         year = year_key.replace("Y", "")
         df = load_and_clean_data(file_path, year)
         if df is not None:
-            stats = analyze_single_dataset(year, df, df_desc)
+            stats = analyze_single_dataset(year, df)
             results[year] = stats
     
     # Compare if multiple datasets
@@ -262,10 +330,18 @@ def analyze_datasets(**datasets):
     print("\n✓ Complete!")
 
 if __name__ == "__main__":
+    if CONFIG["full_run"]:
+        for k in CONFIG["load_params"].keys():
+            CONFIG["load_params"][k] = False
+        for k in CONFIG["compute"].keys():
+            CONFIG["compute"][k] = True
+
+
     # Example usage - uncomment and modify as needed:
     analyze_datasets(
-        Y2016="data/clean_data_2016.csv",
-        Y2025="data/raw.parquet"
+        Y2016="../../python-ecosystem-evolution/data/clean_data_2016.csv",
+        # Y2025="data/clean_data_2025.csv",
+        # Y2025="../../python-ecosystem-evolution/data/raw.parquet"
     )
     
     # Or single dataset:

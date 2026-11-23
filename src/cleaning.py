@@ -70,6 +70,7 @@ def clean_dataframe(data):
     # Create dataframe and apply clean() function to package names
     result = pd.DataFrame(datadict)
     result['clean_package'] = result['package'].apply(clean)
+    result['requirement'] = result['requirement'].apply(clean)
     
     # Standardize the dataframe with only the necessary columns
     final_result = result[['clean_package', 'requirement']].rename(
