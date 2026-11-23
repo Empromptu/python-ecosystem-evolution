@@ -37,11 +37,11 @@ def plot_top_metrics(df_metrics, metric_column, year, top_n=10):
 
 def plot_wordcloud_and_rank(nodes, title, i, pagerank_dict, df_descriptions, save=False, save_path=None):
     """Generates a combined WordCloud and PageRank bar chart for a community."""
-    word_lists = df_descriptions[df_descriptions['name'].isin(nodes)]['word_list']
+    word_counts = df_descriptions[df_descriptions['name'].isin(nodes)]['word_count']
     
     comm_count = Counter()
-    for wl in word_lists:
-        comm_count += Counter(wl)
+    for wl in word_counts:
+        comm_count += wl
     
     # Get top 10 nodes by PageRank for the side bar chart
     top_nodes = sorted(nodes, key=lambda n: pagerank_dict.get(n, 0), reverse=True)[:10]

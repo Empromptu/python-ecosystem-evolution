@@ -3,6 +3,8 @@ import networkx as nx
 import os
 from pathlib import Path
 import simplemma
+import pickle
+from collections import Counter
 
 from src import (
     clean_dataframe,
@@ -31,16 +33,16 @@ CONFIG = {
         },
     "output_dirs": ["output", "output/images", "output/gephi", "output/csv"],
     "load_params": {
-        "load_centralities" : True,
-        "load_communities" : True,
-        "load_descriptions" : True,
+        "load_centralities" : False,
+        "load_communities" : False,
+        "load_descriptions" : False,
     },
     "compute" : {
         "Subgraphs" : True,
-        "Top Metrics": False,
-        "Wordclouds" : False,
-        "save_stats" : False,
-        "CommunitiesDistribution" : False,
+        "Top Metrics": True,
+        "Wordclouds" : True,
+        "save_stats" : True,
+        "CommunitiesDistribution" : True,
         },
     "subgraph_params": {
         "in_degree_threshold": 500,
@@ -126,8 +128,10 @@ def load_descriptions():
     print("""Loading package summaries""")
     
     if CONFIG["load_params"]["load_descriptions"]:
-        df = pd.read_csv("data/word_list.csv", index_col=0)
-        df["word_list"] = df["word_list"].apply(eval)
+        with open('data/word_counts.pkl', 'wb') as file:
+                df = pickle.load(file)
+        # df = pd.read_csv("data/word_list.csv", index_col=0)
+        # df["word_list"] = df["word_list"].apply(eval)
         return df
     
     try:
@@ -139,9 +143,11 @@ def load_descriptions():
     df['name'] = df["name"].apply(clean)
     df = df[["name","summary"]].drop_duplicates()
     
-    df["word_list"] = df["summary"].apply(lematizar).apply(set).apply(list)
-    df = df[["name","word_list"]]
-    df.to_csv("data/word_list.csv")
+    df["word_count"] = df["summary"].apply(lematizar).apply(set).apply(Counter)
+    df = df[["name","word_count"]]
+    with open('data/word_counts.pkl', 'wb') as file:
+            pickle.dump(df, file)
+    # df.to_csv("data/word_list.csv")
 
     return df
 
@@ -281,6 +287,8 @@ def analyze_single_dataset(year, df_clean):
         try:
             partition  = pd.read_csv(f"output/csv/community_partition_{year}.csv",
                                      index_col=0, header=0).iloc[:,0].to_dict()
+            nx.set_node_attributes(G, partition, name="community")
+            nx.set_node_attributes(G_und, partition, name="community")
             print("✓ Partition loaded")
         except Exception as e:
             print(f"✗ Error loading output/csv/community_partition_{year}.csv: {e}")
@@ -291,9 +299,11 @@ def analyze_single_dataset(year, df_clean):
         except Exception as e:
             print(f"✗ Error loading output/csv/community_sizes_{year}.csv: {e}")
 
+
     else:
         print("\n--- CALCULATING COMMUNITIES ---")
         G_und, partition, modularity, comm_sizes = compute_communities(G_und)
+        nx.set_node_attributes(G, partition, name="community")
         pd.Series(partition,name="comm_id").to_csv(f"output/csv/community_partition_{year}.csv")
         comm_sizes.to_csv(f"output/csv/community_sizes_{year}.csv")
 
