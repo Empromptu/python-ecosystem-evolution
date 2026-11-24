@@ -19,11 +19,11 @@ Our analysis reveals a massive structural expansion and densification of the eco
 
 | Metric | 2016 Dataset | 2025 Dataset |
 | :--- | :--- | :--- |
-| **Total Nodes** | 25,819 | 405,872 |
-| **Total Edges** | 72,189 | 2,076,516 |
-| **Average Degree** | 5.59 | 10.23 |
+| **Total Nodes** | 25,819 | 394,710 |
+| **Total Edges** | 72,189 | 2,075,557 |
+| **Average Degree** | 5.59 | 10.52 |
 | **Giant Weakly Connected Component** | 24,823 nodes | 399,758 nodes |
-| **Modularity (Louvain)** | 0.615 | 0.489 |
+| **Modularity (Louvain)** | 0.615 | 0.493 |
 
 ## 🔍 Key Findings & Industry Evolution
 

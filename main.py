@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 import simplemma
 import pickle
-from collections import Counter
 
 from src import (
     clean_dataframe,
@@ -29,20 +28,19 @@ from src import (
 CONFIG = {
     "full_run" : False, # if set to true, runs everything from scratch
     "input_dirs": {
-        "raw_descriptions" : "../../python-ecosystem-evolution/data/raw.parquet"
+        "raw_descriptions" : "data/raw.parquet"
         },
     "output_dirs": ["output", "output/images", "output/gephi", "output/csv"],
-    "load_params": {
+    "load_params": { # Select if these parts should be load from file or computed
         "load_centralities" : False,
         "load_communities" : False,
         "load_descriptions" : False,
     },
-    "compute" : {
-        "Subgraphs" : True,
-        "Top Metrics": True,
-        "Wordclouds" : True,
-        "save_stats" : True,
-        "CommunitiesDistribution" : True,
+    "compute" : { # Select what part of the code should run
+        "subgraphs" : True,
+        "plot_top_metrics": True,
+        "plot_wordclouds" : True,
+        "plot_comm_distribution" : True,
         },
     "subgraph_params": {
         "in_degree_threshold": 500,
@@ -50,9 +48,9 @@ CONFIG = {
         "pagerank_percentile": 0.95,
         "pagerank_top_n": 10000,
         "betweenness_top_n": 300,
-        "communities_top_n": 10
     },
     "visualization_params": {
+        "communities_top_n": 10,
         "top_n_metrics": 15,
         "pagerank_max_iter": 50
     }
@@ -106,7 +104,7 @@ def load_and_clean_data(file_path, year):
 
 
 def lematizar(texto):
-    """Tokeniza + lematiza + filtra en una sola pasada."""
+    """Tokenize text for word counts"""
     if not isinstance(texto, str) or not texto.strip():
         return ""
     STOPWORDS = {
@@ -125,11 +123,12 @@ def lematizar(texto):
 
 
 def load_descriptions():
-    print("""Loading package summaries""")
+    """Loads package descriptions and tokenizes them"""
+    print("""Loading package descriptions""")
     
     if CONFIG["load_params"]["load_descriptions"]:
-        with open('data/word_counts.pkl', 'wb') as file:
-                df = pickle.load(file)
+        with open('data/word_lists.pkl', 'rb') as file:
+            df = pickle.load(file)
         # df = pd.read_csv("data/word_list.csv", index_col=0)
         # df["word_list"] = df["word_list"].apply(eval)
         return df
@@ -143,9 +142,9 @@ def load_descriptions():
     df['name'] = df["name"].apply(clean)
     df = df[["name","summary"]].drop_duplicates()
     
-    df["word_count"] = df["summary"].apply(lematizar).apply(set).apply(Counter)
-    df = df[["name","word_count"]]
-    with open('data/word_counts.pkl', 'wb') as file:
+    df["word_list"] = df["summary"].apply(lematizar).apply(set).apply(list)
+    df = df[["name","word_list"]]
+    with open('data/word_lists.pkl', 'wb') as file:
             pickle.dump(df, file)
     # df.to_csv("data/word_list.csv")
 
@@ -170,6 +169,38 @@ def analyze_centralities(year, G):
         print("✓ Calculated")
     
     return df_metrics
+
+
+def analyze_communities(year, G, G_und):
+    if CONFIG["load_params"]["load_communities"]:
+        print("\n--- LOADING COMMUNITIES ---")
+        try:
+            partition  = pd.read_csv(f"output/csv/community_partition_{year}.csv",
+                                     index_col=0, header=0).iloc[:,0].to_dict()
+            nx.set_node_attributes(G, partition, name="community")
+            nx.set_node_attributes(G_und, partition, name="community")
+            print("✓ Partition loaded")
+        except Exception as e:
+            print(f"✗ Error loading output/csv/community_partition_{year}.csv: {e}")
+        try:
+            comm_sizes = pd.read_csv(f"output/csv/community_sizes_{year}.csv",
+                                     index_col=0, header=0).iloc[:,0]
+            print("✓ Communities sizes loaded")
+        except Exception as e:
+            print(f"✗ Error loading output/csv/community_sizes_{year}.csv: {e}")
+
+    else:
+        print("\n--- CALCULATING COMMUNITIES ---")
+        G_und, partition, modularity, comm_sizes = compute_communities(G_und)
+        nx.set_node_attributes(G, partition, name="community")
+        pd.Series(partition,name="comm_id").to_csv(f"output/csv/community_partition_{year}.csv")
+        comm_sizes.to_csv(f"output/csv/community_sizes_{year}.csv")
+
+        print(f"✓ Found {len(set(partition.values()))} communities")
+        print(f"✓ Biggest community has {max(comm_sizes.values)} nodes")
+        print(f"✓ Modularity: {modularity:.4f}")
+    
+    return partition, comm_sizes
 
 
 def create_subgraphs(year, G, G_und, df_metrics):
@@ -226,7 +257,7 @@ def compute_wordclouds(year, G, df_metrics, comm_sizes, partition):
     df_descriptions = load_descriptions()
     pr_dict = dict(zip(df_metrics['node'], df_metrics['pagerank']))
     communities = {}
-    for i, comm_id in enumerate(comm_sizes.head(CONFIG["subgraph_params"]["communities_top_n"]).index, 1):
+    for i, comm_id in enumerate(comm_sizes.head(CONFIG["visualization_params"]["communities_top_n"]).index, 1):
         communities[comm_id] = [n for n, c in partition.items() if c == comm_id]
     
     try:
@@ -240,6 +271,8 @@ def compute_wordclouds(year, G, df_metrics, comm_sizes, partition):
         print("✓ Generated")
     except Exception as e:
         print(f"⚠ Error: {e}")
+        
+
 
 
 def analyze_single_dataset(year, df_clean):
@@ -273,7 +306,7 @@ def analyze_single_dataset(year, df_clean):
 
     
     # Visualize Metrics
-    if CONFIG["compute"]["Top Metrics"]:
+    if CONFIG["compute"]["plot_top_metrics"]:
         print("\n--- VISUALIZING METRICS ---")
         for col in [
             "degree_centrality", "pagerank", "betweenness_centrality", "closeness_centrality"
@@ -282,45 +315,19 @@ def analyze_single_dataset(year, df_clean):
 
 
     # Communities
-    if CONFIG["load_params"]["load_communities"]:
-        print("\n--- LOADING COMMUNITIES ---")
-        try:
-            partition  = pd.read_csv(f"output/csv/community_partition_{year}.csv",
-                                     index_col=0, header=0).iloc[:,0].to_dict()
-            nx.set_node_attributes(G, partition, name="community")
-            nx.set_node_attributes(G_und, partition, name="community")
-            print("✓ Partition loaded")
-        except Exception as e:
-            print(f"✗ Error loading output/csv/community_partition_{year}.csv: {e}")
-        try:
-            comm_sizes = pd.read_csv(f"output/csv/community_sizes_{year}.csv",
-                                     index_col=0, header=0).iloc[:,0]
-            print("✓ Communities sizes loaded")
-        except Exception as e:
-            print(f"✗ Error loading output/csv/community_sizes_{year}.csv: {e}")
-
-
-    else:
-        print("\n--- CALCULATING COMMUNITIES ---")
-        G_und, partition, modularity, comm_sizes = compute_communities(G_und)
-        nx.set_node_attributes(G, partition, name="community")
-        pd.Series(partition,name="comm_id").to_csv(f"output/csv/community_partition_{year}.csv")
-        comm_sizes.to_csv(f"output/csv/community_sizes_{year}.csv")
-
-        print(f"✓ Found {len(set(partition.values()))} communities")
-        print(f"✓ Modularity: {modularity:.4f}")    
+    partition, comm_sizes = analyze_communities(year, G, G_und)
 
     # Community distribution
-    if CONFIG["compute"]["CommunitiesDistribution"]:
+    if CONFIG["compute"]["plot_comm_distribution"]:
         print("\n--- VISUALIZING COMMUNITY DISTRIBUTION ---")    
         plot_communities_distribution(comm_sizes, year, top_n=15)
     
     # Subgraphs
-    if CONFIG["compute"]["Subgraphs"]:
+    if CONFIG["compute"]["subgraphs"]:
         create_subgraphs(year, G, G_und, df_metrics)
 
     # Wordclouds
-    if CONFIG["compute"]["Wordclouds"]:    
+    if CONFIG["compute"]["plot_wordclouds"]:    
         compute_wordclouds(year, G, df_metrics, comm_sizes, partition)
 
     # Export
@@ -336,6 +343,8 @@ def analyze_single_dataset(year, df_clean):
         'Value': list(stats.values()) + list(comp_stats.values())
     }).to_csv(f"output/csv/summary_{year}.csv", index=False)
     print("✓ Exported")
+    
+    return stats
     
 
 
@@ -391,9 +400,9 @@ if __name__ == "__main__":
 
     # Example usage - uncomment and modify as needed:
     analyze_datasets(
-        Y2016="../../python-ecosystem-evolution/data/clean_data_2016.csv",
-        # Y2025="data/clean_data_2025.csv",
-        # Y2025="../../python-ecosystem-evolution/data/raw.parquet"
+        Y2016="data/clean_data_2016.csv",
+        Y2025="data/clean_data_2025.csv",
+        # Y2025="data/raw.parquet"
     )
     
     # Or single dataset:

@@ -37,11 +37,12 @@ def plot_top_metrics(df_metrics, metric_column, year, top_n=10):
 
 def plot_wordcloud_and_rank(nodes, title, i, pagerank_dict, df_descriptions, save=False, save_path=None):
     """Generates a combined WordCloud and PageRank bar chart for a community."""
-    word_counts = df_descriptions[df_descriptions['name'].isin(nodes)]['word_count']
+    word_counts = df_descriptions[df_descriptions['name'].isin(nodes)]['word_list']
     
-    comm_count = Counter()
+    comm_count = []
     for wl in word_counts:
         comm_count += wl
+    comm_count = Counter(comm_count)
     
     # Get top 10 nodes by PageRank for the side bar chart
     top_nodes = sorted(nodes, key=lambda n: pagerank_dict.get(n, 0), reverse=True)[:10]
@@ -56,19 +57,22 @@ def plot_wordcloud_and_rank(nodes, title, i, pagerank_dict, df_descriptions, sav
     ).generate_from_frequencies(comm_count)
 
     # Plotting
-    fig, ax = plt.subplots(1, 2, figsize=(6.2, 3), gridspec_kw={'width_ratios': [2, 1]})
+    fig, ax = plt.subplots(1, 2, figsize=(7.5, 3), gridspec_kw={'width_ratios': [2.4, 1]})
     
     ax[0].imshow(wordcloud, interpolation='bilinear')
     ax[0].axis('off')
         
     f = lambda x: x[:12] + '...' if len(x)>14 else x
-    top_nodes = [f(n) for n in top_nodes]
+    labels = [f(n) for n in top_nodes]
+    
     ax[1].barh(top_nodes[::-1], top_values[::-1], color='teal', alpha=0.6)
-    ax[1].tick_params(axis='y', labelsize=12, pad=6)
+    ax[1].tick_params(axis='y', labelsize=12, pad=4)
     for spine in ax[1].spines.values(): 
         spine.set_visible(False)
     ax[1].get_xaxis().set_ticks([])
-    fig.tight_layout()
+    ax[1].set_yticks(ax[1].get_yticks())
+    ax[1].set_yticklabels(labels[::-1])
+    # fig.tight_layout()
     
     if save and save_path:
         plt.savefig(save_path, dpi=150, bbox_inches='tight')
@@ -77,7 +81,7 @@ def plot_wordcloud_and_rank(nodes, title, i, pagerank_dict, df_descriptions, sav
         plt.show()
 
 
-def plot_communities_distribution(comm_sizes, year, top_n=15):
+def plot_communities_distribution(comm_sizes, year, percentage=False, top_n=15):
     """
     Generates the distribution of community sizes. Both individual and
     cummulative nodes.
@@ -85,13 +89,19 @@ def plot_communities_distribution(comm_sizes, year, top_n=15):
     percentages = 100 * comm_sizes / sum(comm_sizes)
     top_percentages = percentages.sort_values(ascending=False).head(top_n)
     
+    if percentage:
+        top = top_percentages
+    else:
+        top = comm_sizes.head(top_n)
+    
     fig, ax = plt.subplots(figsize=(6,3))
-    ax.bar(range(1, top_n+1), top_percentages.values, color='teal', alpha=0.6)
+    ax.bar(range(1, top_n+1), top.values, color='teal', alpha=0.6)
     ax.set_xticks(range(1, top_n+1))
-    ax.set_xticklabels(top_percentages.index)
+    ax.set_xticklabels(top.index)
     ax.grid(axis='y')
     ax.tick_params(axis='x', labelrotation=0)
-    ax.yaxis.set_major_formatter('{x:.0f}%')
+    if percentage:
+        ax.yaxis.set_major_formatter('{x:.0f}%')
 
     for spine in ax.spines.values(): 
         spine.set_visible(False)
